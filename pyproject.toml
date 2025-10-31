@@ -6,7 +6,9 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "aiosqlite>=0.21.0",
+    "duckdb>=1.4.1",
     "httpx>=0.28.1",
+    "icecream>=2.1.8",
     "ipykernel>=7.1.0",
     "pydantic>=2.12.3",
     "pytest>=8.4.2",
