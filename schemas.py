@@ -56,24 +56,27 @@ class WBSale(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class WBStock(BaseModel):
-    Discount: int
-    Price: int
-    SCCode: str
-    barcode: str
+    nmId: int
+    lastChangeDate: datetime
+
+    quantity: int
+
     brand: str
     category: str
-    daysOnSite: int
-    inWayFromClient: int
-    inWayToClient: int
-    isRealization: bool
-    isSupply: bool
-    lastChangeDate: datetime
-    nmId: int
-    quantity: int
-    quantityFull: int
-    subject: str
-    supplierArticle: str
-    techSize: str
-    warehouseName: str
+    barcode: str
+
+    warehouseName: str = Field(exclude=True)
+    supplierArticle: str = Field(exclude=True)
+    inWayToClient: int = Field(exclude=True)
+    inWayFromClient: int = Field(exclude=True)
+    quantityFull: int = Field(exclude=True)
+    subject: str = Field(exclude=True)
+    Discount: int = Field(exclude=True)
+    Price: int = Field(exclude=True)
+    SCCode: str = Field(exclude=True)
+    daysOnSite: int = Field(exclude=True)
+    isRealization: bool = Field(exclude=True)
+    isSupply: bool = Field(exclude=True)
+    techSize: str = Field(exclude=True)
 
     model_config = ConfigDict(from_attributes=True)

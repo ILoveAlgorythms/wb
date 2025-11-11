@@ -1,6 +1,6 @@
 from typing import Type, TypeVar, List
-
-# from schemas import WBSale, WBStock
+import datetime
+from schemas import WBSale, WBStock
 
 import asyncio
 import aiosqlite
@@ -8,7 +8,7 @@ import httpx
 from icecream import ic
 from pydantic import BaseModel
 
-DB = "wildberries.db"
+DB = "wb.db"
 API_TOKEN = "eyJhbGciOiJFUzI1NiIsImtpZCI6IjIwMjUwOTA0djEiLCJ0eXAiOiJKV1QifQ.eyJhY2MiOjIsImVudCI6MSwiZXhwIjoxNzc3NTkzOTkxLCJpZCI6IjAxOWEzNTAzLTJjMzctN2E0Ni1iMmE4LTkwNzQyY2I0Y2QwNyIsImlpZCI6MTI0NTM4NzAsIm9pZCI6MTU2OTMsInMiOjAsInNpZCI6ImZmYTA4MmZiLWUxZTktNTdhYi05ZWQyLWM2ZjE3ZDNhZWZkYSIsInQiOnRydWUsInVpZCI6MTI0NTM4NzB9.Mqq4xLDKhdZ_92ptEWiQsK7gepAX1coB39eHcqqBIYuZXpCjbnj4ozVSsR2ENXRGVKxTzlwmLz3x1VRla2Wxkg"
 BASE_URL = "https://statistics-api-sandbox.wildberries.ru/api/v1/supplier"
 
@@ -32,7 +32,7 @@ async def ping():
     from icecream import ic
     async with httpx.AsyncClient() as client:
         try:
-            response = await client.get(f"{BASE_URL}/ping", headers=HEADERS)
+            response = await client.get("https://statistics-api-sandbox.wildberries.ru/ping", headers=HEADERS)
             global r
             r = response
             ic(response.json())
@@ -59,10 +59,34 @@ async def query_api(client: httpx.AsyncClient, endpoint: str, params: dict, Mode
             retry_after = int(e.response.headers.get("X-Ratelimit-Retry", 5))
             print(f"Rate limit hit. Retrying after {retry_after} seconds.")
             await asyncio.sleep(retry_after)
-            return await query_api(client, params, ModelClass)
+            return await query_api(client, endpoint, params, ModelClass)
     except Exception as e:
         ic(response.json())
         raise e
+
+async def get_all_with_pagination(kind_of_data: str, date_from: datetime, date_to: datetime) -> List[ModelType]:
+    """
+    Собирает все данные в промежутке
+
+    :param kind_of_data: sales или stocks
+    :param date_from: с какой даты смотреть
+    :param date_to: по какую дату
+    """
+    assert kind_of_data in ["sales", "stocks"]
+    # assert date_from.tzinfo is not None
+    # assert date_to.tzinfo is not None
+
+    response = 1
+    lastChangeDate = date_from
+    data = []
+    async with httpx.AsyncClient() as client:
+        while response != [] and lastChangeDate < date_to:
+            response = await query_api(client, kind_of_data, params={"dateFrom": lastChangeDate.isoformat()}, ModelClass=WBSale if "sales" else WBStock)
+            if response == []:
+                break
+            data.extend(response)
+            lastChangeDate = response[-1].lastChangeDate.replace(tzinfo=None)
+    return data
 
 async def save_to_db(table: str, data: List[Type[BaseModel]]):
     """Save data to table"""
@@ -71,7 +95,7 @@ async def save_to_db(table: str, data: List[Type[BaseModel]]):
     columns = ", ".join(fields)
     placeholders = ", ".join(f":{field}" for field in fields)
     values = [tuple(item.model_dump()[field] for field in fields) for item in data]
-    
+
     async with aiosqlite.connect(DB) as db:
         await db.executemany(
             f"INSERT INTO sales ({columns}) VALUES ({placeholders})",
@@ -81,26 +105,14 @@ async def save_to_db(table: str, data: List[Type[BaseModel]]):
 
 async def main():
     """Main function to run the data pipeline"""
-    await create_tables()
+    # await ping()
 
-    # Use a recent date; format might need adjustment[citation:7]
-    # date_from = "2023-10-01"
-
-    # print("Fetching sales data...")
-    # sales = await fetch_sales(date_from)
-    # if sales:
-    #     await save_sales_to_db(sales)
-    #     print(f"Successfully saved {len(sales)} sales records.")
-    # else:
-    #     print("Failed to fetch sales data.")
-
-    # print("Fetching stocks data...")
-    # stocks = await fetch_stocks(date_from)
-    # if stocks:
-    #     await save_stocks_to_db(stocks)
-    #     print(f"Successfully saved {len(stocks)} stock records.")
-    # else:
-    #     print("Failed to fetch stocks data.")
+    data = await get_all_with_pagination(
+        "sales",  
+        date_from=datetime.datetime.now() - datetime.timedelta(days=365*3), 
+        date_to=datetime.datetime.now())
+    ic(data[-1])
+    await save_to_db("sales", data)
 
 if __name__ == "__main__":
     asyncio.run(main())
