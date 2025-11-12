@@ -45,7 +45,6 @@ async def query_api(client: httpx.AsyncClient, params: dict, ModelClass: Type[AP
     """
     Делает запрос к API
 
-    :param endpoint: Эндпоинт API
     :param params: Параметры для тела запроса к API
     :param ModelClass: Модель для валидации
     """
