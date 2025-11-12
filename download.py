@@ -41,7 +41,7 @@ async def ping():
             ic(e)
 
 ModelType = TypeVar('ModelType', bound=BaseModel)
-async def query_api(client: httpx.AsyncClient, endpoint: str, params: dict, ModelClass: Type[BaseModel]) -> List[ModelType]:
+async def query_api(client: httpx.AsyncClient, endpoint: str, params: dict, ModelClass: Type[BaseModel], base_url: str = BASE_URL) -> List[ModelType]:
     """
     Делает запрос к API
 
@@ -50,7 +50,7 @@ async def query_api(client: httpx.AsyncClient, endpoint: str, params: dict, Mode
     :param ModelClass: Модель для валидации
     """
     try:
-        response = await client.get(f"{BASE_URL}/{endpoint}", headers=HEADERS, params=params)
+        response = await client.get(f"{base_url}/{endpoint}", headers=HEADERS, params=params)
         response.raise_for_status()
         data = response.json()
         return [ModelClass(**item) for item in data]

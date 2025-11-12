@@ -1,6 +1,7 @@
 # поля совпадают с полями API
 from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
+from typing import List
 
 # TODO: отдельные модели для ответов API и для бд, простая конвертация
 
@@ -80,3 +81,49 @@ class WBStock(BaseModel):
     techSize: str = Field(exclude=True)
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class SizeInfo(BaseModel):
+    sizeID: int
+    price: int
+    discountedPrice: int
+    clubDiscountedPrice: float
+    techSizeName: str
+
+class WBGoodsInfo(BaseModel):
+    nmID: int
+    vendorCode: str
+    sizes: List[SizeInfo] = Field(exclude=True)
+    currencyIsoCode4217: str
+    discount: int
+    clubDiscount: int
+    editableSizePrice: bool = Field(exclude=True)
+    isBadTurnover: bool
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class WBProduct(BaseModel):
+    """
+    Информация от WBGoodsInfo по размерам. 
+    
+    Получается не напрямую от API, а через `raw_goods_to_single_product`
+    """
+    nmID: int
+    vendorCode: str
+    sizeID: int
+    currencyIsoCode4217: str
+    discount: int
+    clubDiscount: int
+    isBadTurnover: bool
+    request_received_at: datetime = Field(default_factory=datetime.now)
+    
+    # Size info
+    price: int
+    discountedPrice: int
+    clubDiscountedPrice: float
+    techSizeName: str
+    
+    model_config = ConfigDict(from_attributes=True)
+
+def raw_goods_to_single_product(raw_goods: WBGoodsInfo) -> List[WBProduct]:
+    return [WBProduct(**raw_goods.model_dump(), **size.model_dump()) for size in raw_goods.sizes]
