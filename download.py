@@ -41,7 +41,7 @@ async def ping():
             ic(e)
 
 ModelType = TypeVar('ModelType', bound=APIEndpoint)
-async def query_api(client: httpx.AsyncClient, endpoint: str, params: dict, ModelClass: Type[APIEndpoint], base_url: str = BASE_URL) -> List[ModelType]:
+async def query_api(client: httpx.AsyncClient, params: dict, ModelClass: Type[APIEndpoint]) -> List[ModelType]:
     """
     Делает запрос к API
 
@@ -65,7 +65,7 @@ async def query_api(client: httpx.AsyncClient, endpoint: str, params: dict, Mode
             retry_after = int(e.response.headers.get("X-Ratelimit-Retry", 5))
             print(f"Rate limit hit. Retrying after {retry_after} seconds.")
             await asyncio.sleep(retry_after)
-            return await query_api(client, endpoint, params, ModelClass)
+            return await query_api(client, params, ModelClass)
     except Exception as e:
         ic(response.json())
         raise e
