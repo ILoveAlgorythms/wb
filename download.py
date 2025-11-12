@@ -116,6 +116,7 @@ async def main():
     for good in goods:
         data.extend(raw_goods_to_single_product(good))
     if len(data) == 0:
+        print("no data")
         return
     ic(data[-1])
     await save_to_db("sales", data)
