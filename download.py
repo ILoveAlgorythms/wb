@@ -10,7 +10,6 @@ from pydantic import BaseModel
 
 DB = "wb.db"
 API_TOKEN = "eyJhbGciOiJFUzI1NiIsImtpZCI6IjIwMjUwOTA0djEiLCJ0eXAiOiJKV1QifQ.eyJhY2MiOjIsImVudCI6MSwiZXhwIjoxNzc3NTkzOTkxLCJpZCI6IjAxOWEzNTAzLTJjMzctN2E0Ni1iMmE4LTkwNzQyY2I0Y2QwNyIsImlpZCI6MTI0NTM4NzAsIm9pZCI6MTU2OTMsInMiOjAsInNpZCI6ImZmYTA4MmZiLWUxZTktNTdhYi05ZWQyLWM2ZjE3ZDNhZWZkYSIsInQiOnRydWUsInVpZCI6MTI0NTM4NzB9.Mqq4xLDKhdZ_92ptEWiQsK7gepAX1coB39eHcqqBIYuZXpCjbnj4ozVSsR2ENXRGVKxTzlwmLz3x1VRla2Wxkg"
-BASE_URL = "https://statistics-api-sandbox.wildberries.ru/api/v1/supplier"
 
 HEADERS = {
     "Authorization": API_TOKEN
