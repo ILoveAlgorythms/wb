@@ -1,4 +1,7 @@
-def main():
+import download
+
+async def main():
+    await download.create_tables()
     print("Hello from wb!")
 
 

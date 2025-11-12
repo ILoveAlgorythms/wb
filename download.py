@@ -1,12 +1,10 @@
 from typing import Type, TypeVar, List
-import datetime
-from schemas import WBSale, WBStock, APIEndpoint
+from schemas import SQLRow, APIEndpoint
 
 import asyncio
 import aiosqlite
 import httpx
 from icecream import ic
-from pydantic import BaseModel
 
 DB = "wb.db"
 API_TOKEN = "eyJhbGciOiJFUzI1NiIsImtpZCI6IjIwMjUwOTA0djEiLCJ0eXAiOiJKV1QifQ.eyJhY2MiOjIsImVudCI6MSwiZXhwIjoxNzc3NTkzOTkxLCJpZCI6IjAxOWEzNTAzLTJjMzctN2E0Ni1iMmE4LTkwNzQyY2I0Y2QwNyIsImlpZCI6MTI0NTM4NzAsIm9pZCI6MTU2OTMsInMiOjAsInNpZCI6ImZmYTA4MmZiLWUxZTktNTdhYi05ZWQyLWM2ZjE3ZDNhZWZkYSIsInQiOnRydWUsInVpZCI6MTI0NTM4NzB9.Mqq4xLDKhdZ_92ptEWiQsK7gepAX1coB39eHcqqBIYuZXpCjbnj4ozVSsR2ENXRGVKxTzlwmLz3x1VRla2Wxkg"
@@ -24,75 +22,74 @@ async def create_tables():
         await db.commit()
 
 async def ping():
-    """
-    Fetch stocks data from Wildberries API.
-    You need to confirm the exact endpoint and parameters[citation:4].
-    """
-    from icecream import ic
     async with httpx.AsyncClient() as client:
         try:
             response = await client.get("https://statistics-api-sandbox.wildberries.ru/ping", headers=HEADERS)
-            global r
-            r = response
             ic(response.json())
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
             ic(e)
 
 ModelType = TypeVar('ModelType', bound=APIEndpoint)
-async def query_api(client: httpx.AsyncClient, params: dict, ModelClass: Type[APIEndpoint]) -> List[ModelType]:
+async def query_api(client: httpx.AsyncClient, ModelClass: Type[APIEndpoint], query_params: dict) -> List[ModelType]:
     """
-    Делает запрос к API
+    Делает один запрос к API
 
     :param params: Параметры для тела запроса к API
     :param ModelClass: Модель для валидации
     """
     try:
-        response = await client.request(
+        assert ModelClass._method == "GET"
+        ic(query_params)
+        response: httpx.Response = await client.request(
             url=ModelClass._url,
             method=ModelClass._method,
             headers=HEADERS,
-            data=params # ?
+            params=query_params
         )
-        # response = await client.get(f"{base_url}/{endpoint}", headers=HEADERS, params=params)
+        ic(response.request)
+
         response.raise_for_status()
         data = response.json()
+        if ModelClass._json_key:
+            for key in ModelClass._json_key:
+                data = data.get(key)
         return [ModelClass(**item) for item in data]
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 429:
             retry_after = int(e.response.headers.get("X-Ratelimit-Retry", 5))
             print(f"Rate limit hit. Retrying after {retry_after} seconds.")
             await asyncio.sleep(retry_after)
-            return await query_api(client, params, ModelClass)
+            return await query_api(client, ModelClass, query_params)
+        else:
+            ic()
+            ic(response.json())
     except Exception as e:
-        ic(response.json())
+        ic()
+        # ic(response.json())
         raise e
 
-async def get_all_with_pagination(kind_of_data: str, date_from: datetime, date_to: datetime) -> List[ModelType]:
+async def query_with_pagination(ModelClass: Type[APIEndpoint], query_params: dict = {}, pagination_params: dict = {}, save_to_db: bool = False) -> List[ModelType]:
     """
-    Собирает все данные в промежутке
+    Обёртка с пагинацией. TODO: save_to_db на лету
 
-    :param kind_of_data: sales или stocks
-    :param date_from: с какой даты смотреть
-    :param date_to: по какую дату
+    :param query_params: параметры для api запроса
+    :param pagination_params: параметры для пагинации
     """
-    assert kind_of_data in ["sales", "stocks"]
-    # assert date_from.tzinfo is not None
-    # assert date_to.tzinfo is not None
-
-    response = 1
-    lastChangeDate = date_from
+    assert not save_to_db
     data = []
     async with httpx.AsyncClient() as client:
-        while response != [] and lastChangeDate < date_to:
-            response = await query_api(client, kind_of_data, params={"dateFrom": lastChangeDate.isoformat()}, ModelClass=WBSale if "sales" else WBStock)
-            if response == []:
+        pagination = ModelClass._pagination(**pagination_params)
+        response = True
+        while response != [] and pagination:
+            response = await query_api(client, ModelClass, query_params = (pagination | query_params))
+            if not response or len(response) == 0:
                 break
+            pagination = ModelClass._pagination(response[-1], **pagination_params)
             data.extend(response)
-            lastChangeDate = response[-1].lastChangeDate.replace(tzinfo=None)
     return data
 
-async def save_to_db(table: str, data: List[Type[BaseModel]]):
+async def save_to_db(data: List[Type[SQLRow]]):
     """Save data to table"""
     # Автоматически получаем поля из модели
     fields = list(data[0].model_dump().keys())
@@ -102,19 +99,26 @@ async def save_to_db(table: str, data: List[Type[BaseModel]]):
 
     async with aiosqlite.connect(DB) as db:
         await db.executemany(
-            f"INSERT INTO sales ({columns}) VALUES ({placeholders})",
+            f"INSERT INTO {data[0]._table} ({columns}) VALUES ({placeholders})",
             values
         )
         await db.commit()
 
 async def main():
     """Main function to run the data pipeline"""
-    # await ping()
+    await ping()
 
-    data = await get_all_with_pagination(
-        "sales",  
-        date_from=datetime.datetime.now() - datetime.timedelta(days=365*3), 
-        date_to=datetime.datetime.now())
+    from schemas import WBGoodsInfo, raw_goods_to_single_product, WBSale
+    import datetime
+    goods = await query_with_pagination(
+        # WBGoodsInfo
+        WBSale, pagination_params={"dateFrom": (datetime.datetime.now().replace(tzinfo=None) - datetime.timedelta(days=365*3)).isoformat(), "dateTo":datetime.datetime.now().replace(tzinfo=None)}, 
+    )
+    data = []
+    for good in goods:
+        data.extend(raw_goods_to_single_product(good))
+    if len(data) == 0:
+        return
     ic(data[-1])
     await save_to_db("sales", data)
 

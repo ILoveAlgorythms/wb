@@ -31,6 +31,25 @@ CREATE TABLE IF NOT EXISTS stocks (
     barcode TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    nmID INTEGER NOT NULL -- Артикул WB (шериться м/у размерами)
+    vendorCode TEXT NOT NULL -- Артикул продавца
+    currencyIsoCode4217 TEXT NOT NULL
+    discount INTEGER NOT NULL
+    clubDiscount INTEGER NOT NULL
+    isBadTurnover BOOLEAN NOT NULL
+    request_received_at TEXT NOT NULL
+
+    -- Size info
+    sizeID INTEGER NOT NULL -- ID размера. В методах Контента это поле chrtID
+    price INTEGER NOT NULL
+    discountedPrice INTEGER NOT NULL
+    clubDiscountedPrice REAL NOT NULL
+    techSizeName TEXT NOT NULL
+
+);
 
 -- view1
 -- товар: наименование, бренд, товарная группа

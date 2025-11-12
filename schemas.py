@@ -1,7 +1,7 @@
 # поля совпадают с полями API
 from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
-from typing import List, ClassVar
+from typing import List, ClassVar, Optional, Self
 
 # TODO: отдельные модели для ответов API и для бд, простая конвертация
 
@@ -25,8 +25,34 @@ from typing import List, ClassVar
 class APIEndpoint(BaseModel):
     _url: ClassVar[str]
     _method: ClassVar[str]
+    _json_key: ClassVar[Optional[List[str]]]
 
-class WBSale(APIEndpoint):
+    @staticmethod
+    def _pagination(response: Optional[dict] = None, **kwargs) -> Optional[dict]:
+        """
+        Принимает response от прошлого запроса (и дополительне параметры), возвращает параметры пагинации для нового запроса или None, если это последний
+
+        Usage:
+            ```python
+            pagination = model_class._pagination(**pagination_params)
+            while response != [] and pagination:
+                response = await query_api(..., params = pagination | orig_params)
+                pagination = model_class._pagination(response[-1], **pagination_params)
+            ```
+        """
+        if response is None:
+            return {"limit": 1000}
+        return {"limit": response["limit"], "offset": response["limit"]+response["offset"]}
+
+class SQLRow(BaseModel):
+    """
+    указывает, что класс сереализуется сразу в ровно одну запись в бд
+
+    некоторые api эндпоинты возвращают объекты со списком внутри, в таком случае нужно конвертировать их к `SQLRow` классу
+    """
+    _table: ClassVar[str]
+
+class WBSale(APIEndpoint, SQLRow):
     nmId: int # артикул вб
     lastChangeDate: datetime # Для одного ответа на запрос с flag=0 или без flag в системе установлено условное ограничение 80000 строк. Поэтому, чтобы получить все продажи и возвраты, может потребоваться более, чем один запрос. Во втором и далее запросе в параметре dateFrom используйте полное значение поля lastChangeDate из последней строки ответа на предыдущий запрос.
     # данные продажи
@@ -61,9 +87,19 @@ class WBSale(APIEndpoint):
 
     _url: ClassVar[str] = "https://statistics-api-sandbox.wildberries.ru/api/v1/supplier/sales"
     _method: ClassVar[str] = "GET"
+    _json_key: ClassVar[Optional[List[str]]] = None
+    @staticmethod
+    def _pagination(response: Optional[Self] = None, **kwargs) -> Optional[dict]:
+        if response is None:
+            return {"dateFrom": kwargs.get("dateFrom")}
+        if response.lastChangeDate.replace(tzinfo=None) > kwargs.get("dateTo"):
+            return None
+        return {"dateFrom": response.lastChangeDate.isoformat()}
+
+    _table: ClassVar[str] = "sales"
     model_config = ConfigDict(from_attributes=True)
 
-class WBStock(BaseModel):
+class WBStock(APIEndpoint, SQLRow):
     nmId: int
     lastChangeDate: datetime
 
@@ -87,10 +123,23 @@ class WBStock(BaseModel):
     isSupply: bool = Field(exclude=True)
     techSize: str = Field(exclude=True)
 
+    _url: ClassVar[str] = "https://statistics-api-sandbox.wildberries.ru/api/v1/supplier/stocks"
+    _method: ClassVar[str] = "GET"
+    _json_key: ClassVar[Optional[List[str]]] = None
+    @staticmethod
+    def _pagination(response: Optional[Self] = None, **kwargs) -> Optional[dict]:
+        if response is None:
+            return {"dateFrom": kwargs.get("dateFrom")}
+        if response.lastChangeDate.replace(tzinfo=None) > kwargs.get("dateTo"):
+            return None
+        return {"dateFrom": response.lastChangeDate.isoformat()}
+
+    _table: ClassVar[str] = "stocks"
+
     model_config = ConfigDict(from_attributes=True)
 
 
-class SizeInfo(BaseModel):
+class _SizeInfo(BaseModel):
     sizeID: int
     price: int
     discountedPrice: int
@@ -99,39 +148,40 @@ class SizeInfo(BaseModel):
 
 class WBGoodsInfo(APIEndpoint):
     nmID: int
-    vendorCode: str
-    sizes: List[SizeInfo] = Field(exclude=True)
+    vendorCode: str = Field(exclude=True)
+    sizes: List[_SizeInfo] = Field(exclude=True)
     currencyIsoCode4217: str
     discount: int
-    clubDiscount: int
+    clubDiscount: float
     editableSizePrice: bool = Field(exclude=True)
     isBadTurnover: bool
-    
-    _url: ClassVar[str] = "https://discounts-prices-api.wildberries.ru/api/v2/list/goods/filter"
+
+    _url: ClassVar[str] = "https://discounts-prices-api-sandbox.wildberries.ru/api/v2/list/goods/filter"
     _method: ClassVar[str] = "GET"
+    _json_key: ClassVar[Optional[List[str]]] = ["data", "listGoods"]
     model_config = ConfigDict(from_attributes=True)
 
-class WBProduct(BaseModel):
+class WBProduct(SQLRow):
     """
-    Информация от WBGoodsInfo по размерам. 
-    
+    Информация от WBGoodsInfo по размерам.
+
     Получается не напрямую от API, а через `raw_goods_to_single_product`
     """
     nmID: int
-    vendorCode: str
-    sizeID: int
     currencyIsoCode4217: str
     discount: int
-    clubDiscount: int
+    clubDiscount: float
     isBadTurnover: bool
     request_received_at: datetime = Field(default_factory=datetime.now)
-    
+
     # Size info
+    sizeID: int
     price: int
     discountedPrice: int
     clubDiscountedPrice: float
     techSizeName: str
-    
+
+    _table: ClassVar[str] = "items"
     model_config = ConfigDict(from_attributes=True, extra='ignore')
 
 def raw_goods_to_single_product(raw_goods: WBGoodsInfo) -> List[WBProduct]:
