@@ -1,7 +1,7 @@
 # поля совпадают с полями API
 from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
-from typing import List
+from typing import List, ClassVar
 
 # TODO: отдельные модели для ответов API и для бд, простая конвертация
 
@@ -22,7 +22,11 @@ from typing import List
 #     brand: str # HARPER
 #     barcode: str # 4670140060095 / 4670140060118 ?
 
-class WBSale(BaseModel):
+class APIEndpoint(BaseModel):
+    _url: ClassVar[str]
+    _method: ClassVar[str]
+
+class WBSale(APIEndpoint):
     nmId: int # артикул вб
     lastChangeDate: datetime # Для одного ответа на запрос с flag=0 или без flag в системе установлено условное ограничение 80000 строк. Поэтому, чтобы получить все продажи и возвраты, может потребоваться более, чем один запрос. Во втором и далее запросе в параметре dateFrom используйте полное значение поля lastChangeDate из последней строки ответа на предыдущий запрос.
     # данные продажи
@@ -54,6 +58,9 @@ class WBSale(BaseModel):
     warehouseName: str = Field(exclude=True)
     warehouseType: str = Field(exclude=True)
 
+
+    _url: ClassVar[str] = "https://statistics-api-sandbox.wildberries.ru/api/v1/supplier/sales"
+    _method: ClassVar[str] = "GET"
     model_config = ConfigDict(from_attributes=True)
 
 class WBStock(BaseModel):
@@ -90,7 +97,7 @@ class SizeInfo(BaseModel):
     clubDiscountedPrice: float
     techSizeName: str
 
-class WBGoodsInfo(BaseModel):
+class WBGoodsInfo(APIEndpoint):
     nmID: int
     vendorCode: str
     sizes: List[SizeInfo] = Field(exclude=True)
@@ -100,6 +107,8 @@ class WBGoodsInfo(BaseModel):
     editableSizePrice: bool = Field(exclude=True)
     isBadTurnover: bool
     
+    _url: ClassVar[str] = "https://discounts-prices-api.wildberries.ru/api/v2/list/goods/filter"
+    _method: ClassVar[str] = "GET"
     model_config = ConfigDict(from_attributes=True)
 
 class WBProduct(BaseModel):
@@ -123,7 +132,7 @@ class WBProduct(BaseModel):
     clubDiscountedPrice: float
     techSizeName: str
     
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, extra='ignore')
 
 def raw_goods_to_single_product(raw_goods: WBGoodsInfo) -> List[WBProduct]:
     return [WBProduct(**raw_goods.model_dump(), **size.model_dump()) for size in raw_goods.sizes]

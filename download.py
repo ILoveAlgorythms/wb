@@ -1,6 +1,6 @@
-from typing import Type, TypeVar, List
+from typing import Type, TypeVar, List, Protocol, ClassVar
 import datetime
-from schemas import WBSale, WBStock
+from schemas import WBSale, WBStock, APIEndpoint
 
 import asyncio
 import aiosqlite
@@ -40,8 +40,12 @@ async def ping():
         except httpx.HTTPStatusError as e:
             ic(e)
 
-ModelType = TypeVar('ModelType', bound=BaseModel)
-async def query_api(client: httpx.AsyncClient, endpoint: str, params: dict, ModelClass: Type[BaseModel], base_url: str = BASE_URL) -> List[ModelType]:
+# class APIEndpoint(Protocol):
+#     _url: ClassVar[str]
+#     _method: ClassVar[str]
+
+ModelType = TypeVar('ModelType', bound=APIEndpoint)
+async def query_api(client: httpx.AsyncClient, endpoint: str, params: dict, ModelClass: Type[APIEndpoint], base_url: str = BASE_URL) -> List[ModelType]:
     """
     Делает запрос к API
 
@@ -50,7 +54,13 @@ async def query_api(client: httpx.AsyncClient, endpoint: str, params: dict, Mode
     :param ModelClass: Модель для валидации
     """
     try:
-        response = await client.get(f"{base_url}/{endpoint}", headers=HEADERS, params=params)
+        response = await client.request(
+            url=ModelClass._url,
+            method=ModelClass._method,
+            headers=HEADERS,
+            data=params # ?
+        )
+        # response = await client.get(f"{base_url}/{endpoint}", headers=HEADERS, params=params)
         response.raise_for_status()
         data = response.json()
         return [ModelClass(**item) for item in data]
