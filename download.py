@@ -40,10 +40,6 @@ async def ping():
         except httpx.HTTPStatusError as e:
             ic(e)
 
-# class APIEndpoint(Protocol):
-#     _url: ClassVar[str]
-#     _method: ClassVar[str]
-
 ModelType = TypeVar('ModelType', bound=APIEndpoint)
 async def query_api(client: httpx.AsyncClient, endpoint: str, params: dict, ModelClass: Type[APIEndpoint], base_url: str = BASE_URL) -> List[ModelType]:
     """
