@@ -1,4 +1,4 @@
-from typing import Type, TypeVar, List, Protocol, ClassVar
+from typing import Type, TypeVar, List
 import datetime
 from schemas import WBSale, WBStock, APIEndpoint
 
