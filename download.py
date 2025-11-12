@@ -25,7 +25,7 @@ async def ping():
     async with httpx.AsyncClient() as client:
         try:
             response = await client.get("https://statistics-api-sandbox.wildberries.ru/ping", headers=HEADERS)
-            ic(response.json())
+            print("---PING---")
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
             ic(e)
@@ -40,14 +40,12 @@ async def query_api(client: httpx.AsyncClient, ModelClass: Type[APIEndpoint], qu
     """
     try:
         assert ModelClass._method == "GET"
-        ic(query_params)
         response: httpx.Response = await client.request(
             url=ModelClass._url,
             method=ModelClass._method,
             headers=HEADERS,
             params=query_params
         )
-        ic(response.request)
 
         response.raise_for_status()
         data = response.json()
@@ -111,8 +109,8 @@ async def main():
     from schemas import WBGoodsInfo, raw_goods_to_single_product, WBSale
     import datetime
     goods = await query_with_pagination(
-        # WBGoodsInfo
-        WBSale, pagination_params={"dateFrom": (datetime.datetime.now().replace(tzinfo=None) - datetime.timedelta(days=365*3)).isoformat(), "dateTo":datetime.datetime.now().replace(tzinfo=None)}, 
+        WBGoodsInfo
+        # WBSale, pagination_params={"dateFrom": (datetime.datetime.now().replace(tzinfo=None) - datetime.timedelta(days=365*3)).isoformat(), "dateTo":datetime.datetime.now().replace(tzinfo=None)}, 
     )
     data = []
     for good in goods:
